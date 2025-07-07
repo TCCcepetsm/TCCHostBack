@@ -8,7 +8,6 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -17,50 +16,86 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
-	private final CustomUserDetailsService userDetailsService;
+	private static final String[] PUBLIC_ENDPOINTS = {
+			"/api/auth/**",
+			"/api/usuarios/register",
+			"/api/usuarios/login",
+			"/swagger-ui/**",
+			"/v3/api-docs/**",
+			"/api-docs/**",
+			"/api/agendamentos2"
+	};
+
+	private static final String[] AUTHENTICATED_ENDPOINTS = {
+			"/api/auth/validate-token",
+			"/api/agendamentos2/criar2"
+	};
+
+	private static final String[] ADMIN_ENDPOINTS = {
+			"/api/admin/**"
+	};
+
+	private static final String[] PROFISSIONAL_ENDPOINTS = {
+			"/api/profissional/**"
+	};
+
+	private static final String[] AGENDAMENTO_ENDPOINTS = {
+			"/api/agendamentos/**"
+	};
+
 	private final JwtAuthFilter jwtAuthFilter;
 
-	public SecurityConfig(CustomUserDetailsService userDetailsService, JwtAuthFilter jwtAuthFilter) {
-		this.userDetailsService = userDetailsService;
+	public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
 		this.jwtAuthFilter = jwtAuthFilter;
 	}
 
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-		return http
-				.cors()
+		http
+				.cors().configurationSource(corsConfigurationSource())
 				.and()
-				.csrf(csrf -> csrf.disable()).authorizeHttpRequests(auth -> auth
-				// Rotas públicas
-				.requestMatchers("/api/auth/**", "/api/usuarios/**", "/swagger-ui/**", "/v3/api-docs/**",
-						"/api/agendamentos2")
-				.permitAll()
+				.csrf().disable()
+				.authorizeHttpRequests(auth -> auth
+						.requestMatchers(PUBLIC_ENDPOINTS).permitAll()
+						.requestMatchers(AUTHENTICATED_ENDPOINTS).authenticated()
+						.requestMatchers(ADMIN_ENDPOINTS).hasAuthority("ROLE_ADMIN")
+						.requestMatchers(PROFISSIONAL_ENDPOINTS).hasAuthority("ROLE_PROFISSIONAL")
+						.requestMatchers(AGENDAMENTO_ENDPOINTS)
+						.hasAnyAuthority("ROLE_USUARIO", "ROLE_PROFISSIONAL", "ROLE_ADMIN")
+						.anyRequest().authenticated())
+				.sessionManagement(session -> session
+						.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+				.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
-				.requestMatchers("/api/auth/validate-token").authenticated()
+		return http.build();
+	}
 
-				.requestMatchers("/api/agendamentos2/criar2").authenticated()
+	@Bean
+	public CorsConfigurationSource corsConfigurationSource() {
+		CorsConfiguration config = new CorsConfiguration();
 
-				// Rotas administrativas - usando ROLE_ explicitamente
-				.requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
+		// Configuração para Render.com e desenvolvimento local
+		config.setAllowedOriginPatterns(List.of(
+				"https://tcchostfront.onrender.com",
+				"http://localhost:*",
+				"http://127.0.0.1:*"));
 
-				// Rotas para profissionais
-				.requestMatchers("/api/profissional/**").hasAuthority("ROLE_PROFISSIONAL")
+		config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+		config.setAllowedHeaders(Arrays.asList("Authorization", "Cache-Control", "Content-Type"));
+		config.setExposedHeaders(List.of("Authorization"));
+		config.setAllowCredentials(true);
+		config.setMaxAge(3600L);
 
-				// Rotas de agendamento
-				.requestMatchers("/api/agendamentos/**")
-				.hasAnyAuthority("ROLE_USUARIO", "ROLE_PROFISSIONAL", "ROLE_ADMIN")
-
-				// Todas as outras requisições
-				.anyRequest().authenticated())
-				.sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-				.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class).build();
+		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+		source.registerCorsConfiguration("/**", config);
+		return source;
 	}
 
 	@Bean
@@ -72,19 +107,4 @@ public class SecurityConfig {
 	public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
 		return config.getAuthenticationManager();
 	}
-
-
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration config = new CorsConfiguration();
-        //config.setAllowedOrigins(List.of("http://127.0.0.1:5000", "http://localhost:5000"));
-        config.setAllowedOriginPatterns(List.of("*"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Cache-Control", "Content-Type"));
-        config.setAllowCredentials(true); // Necessário se usar JWT ou cookies
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-        return source;
-    }
 }

@@ -1,63 +1,73 @@
 package com.recorder.controller.entity.enuns;
 
+import java.util.Arrays;
+import java.util.Locale;
+import java.util.stream.Collectors;
+
 /**
  * Enum que representa os tipos de roles/perfis de usuário no sistema.
- * Armazena as roles no formato que o Spring Security espera (ROLE_*).
+ * Segue o padrão do Spring Security (ROLE_*) e fornece métodos utilitários.
  */
 public enum Roles {
-    
+
     ROLE_USUARIO("ROLE_USUARIO", "Usuário comum do sistema"),
     ROLE_ADMIN("ROLE_ADMIN", "Administrador com acesso total"),
     ROLE_PROFISSIONAL("ROLE_PROFISSIONAL", "Profissional com acesso especializado");
-    
-    private final String descricao;  // Formato ROLE_* para Spring Security
-    private final String nomeExibicao;  // Nome amigável para exibição
-    
-    /**
-     * Construtor do enum
-     * @param descricao - No formato ROLE_* (ex: ROLE_USUARIO)
-     * @param nomeExibicao - Nome amigável para exibição (ex: "Usuário")
-     */
-    Roles(String descricao, String nomeExibicao) {
+
+    private static final String ROLE_PREFIX = "ROLE_";
+    private final String authority;
+    private final String descricao;
+
+    Roles(String authority, String descricao) {
+        if (!authority.startsWith(ROLE_PREFIX)) {
+            throw new IllegalArgumentException("Toda role deve começar com " + ROLE_PREFIX);
+        }
+        this.authority = authority;
         this.descricao = descricao;
-        this.nomeExibicao = nomeExibicao;
     }
-    
-    /**
-     * @return A descrição no formato ROLE_* (Spring Security compatible)
-     */
+
+    public String getAuthority() {
+        return authority;
+    }
+
     public String getDescricao() {
         return descricao;
     }
-    
-    /**
-     * @return Nome amigável para exibição (sem ROLE_)
-     */
-    public String getNomeExibicao() {
-        return nomeExibicao;
+
+    public String getRoleSemPrefix() {
+        return authority.substring(ROLE_PREFIX.length());
     }
-    
-    /**
-     * Método para converter de String para enum
-     * @param texto Pode ser com ou sem ROLE_ prefix
-     * @return A instância do enum correspondente
-     * @throws IllegalArgumentException Se não encontrar correspondência
-     */
-    public static Roles fromString(String texto) {
-        for (Roles role : Roles.values()) {
-            if (role.descricao.equalsIgnoreCase(texto) || 
-                role.name().equalsIgnoreCase(texto) ||
-                role.descricao.equalsIgnoreCase("ROLE_" + texto)) {
+
+    public static Roles fromAuthority(String authority) {
+        if (authority == null || authority.isBlank()) {
+            throw new IllegalArgumentException("Authority não pode ser nula ou vazia");
+        }
+
+        String normalized = authority.toUpperCase(Locale.ROOT);
+        if (!normalized.startsWith(ROLE_PREFIX)) {
+            normalized = ROLE_PREFIX + normalized;
+        }
+
+        for (Roles role : values()) {
+            if (role.authority.equals(normalized)) {
                 return role;
             }
         }
-        throw new IllegalArgumentException("Nenhuma role encontrada para: " + texto);
+
+        throw new IllegalArgumentException(String.format(
+                "Authority '%s' inválida. Valores permitidos: %s",
+                authority,
+                Arrays.stream(values())
+                        .map(Roles::getAuthority)
+                        .collect(Collectors.joining(", "))));
     }
-    
-    /**
-     * @return Versão simplificada para exibição (sem ROLE_)
-     */
-    public String getRoleSimplificada() {
-        return descricao.replace("ROLE_", "");
+
+    public static boolean isValid(String authority) {
+        try {
+            fromAuthority(authority);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 }

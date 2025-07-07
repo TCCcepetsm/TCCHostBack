@@ -20,11 +20,15 @@ import java.util.stream.Collectors;
 @Service
 public class JwtService {
 
+	private static final String ROLE_PREFIX = "ROLE_";
+	private static final String ROLE_CLAIM = "role";
+	private static final String AUTHORITIES_CLAIM = "authorities";
+
 	@Value("${jwt.secret}")
 	private String secretKey;
 
 	@Value("${jwt.expiration}")
-	private String jwtExpirationString;
+	private long jwtExpirationMs; // Mudado para long diretamente
 
 	public String extractUsername(String token) {
 		return extractClaim(token, Claims::getSubject);
@@ -32,18 +36,20 @@ public class JwtService {
 
 	public String extractRole(String token) {
 		return extractClaim(token, claims -> {
-			// Tenta obter a role primeiro do claim "role" (backward compatibility)
-			String role = claims.get("role", String.class);
+			// Tenta obter a role do claim específico
+			String role = claims.get(ROLE_CLAIM, String.class);
 			if (role != null) {
-				return role.startsWith("ROLE_") ? role : "ROLE_" + role;
+				return role.startsWith(ROLE_PREFIX) ? role : ROLE_PREFIX + role;
 			}
 
-			// Se não encontrar no claim "role", tenta obter do claim "authorities"
-			if (claims.containsKey("authorities")) {
-				String authorities = claims.get("authorities").toString();
-				if (authorities.contains("ROLE_")) {
-					return authorities.split("ROLE_")[1].split("\"")[0];
-				}
+			// Fallback para authorities (compatibilidade)
+			if (claims.containsKey(AUTHORITIES_CLAIM)) {
+				return claims.get(AUTHORITIES_CLAIM, String.class)
+						.lines()
+						.filter(auth -> auth.contains(ROLE_PREFIX))
+						.findFirst()
+						.map(auth -> auth.split(ROLE_PREFIX)[1].replaceAll("\"", ""))
+						.orElse(null);
 			}
 
 			return null;
@@ -56,31 +62,38 @@ public class JwtService {
 	}
 
 	public String generateToken(UserDetails userDetails) {
-		Map<String, Object> claims = new HashMap<>();
-
-		// Adiciona a role principal como claim separado
-		String mainRole = userDetails.getAuthorities().stream().map(GrantedAuthority::getAuthority)
-				.filter(auth -> auth.startsWith("ROLE_")).findFirst().orElse("ROLE_USUARIO");
-
-		claims.put("role", mainRole);
-
-		// Adiciona todas as authorities (opcional)
-		claims.put("authorities",
-				userDetails.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList()));
-
-		return generateToken(claims, userDetails);
+		return generateToken(new HashMap<>(), userDetails);
 	}
 
 	public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
-		return Jwts.builder().setClaims(extraClaims).setSubject(userDetails.getUsername())
-				.setIssuedAt(new Date(System.currentTimeMillis()))
-				.setExpiration(new Date(System.currentTimeMillis() + getJwtExpiration()))
-				.signWith(getSignInKey(), SignatureAlgorithm.HS256).compact();
+		String mainRole = userDetails.getAuthorities().stream()
+				.map(GrantedAuthority::getAuthority)
+				.filter(auth -> auth.startsWith(ROLE_PREFIX))
+				.findFirst()
+				.orElse(ROLE_PREFIX + "USER");
+
+		Map<String, Object> claims = new HashMap<>(extraClaims);
+		claims.put(ROLE_CLAIM, mainRole);
+		claims.put(AUTHORITIES_CLAIM, userDetails.getAuthorities().stream()
+				.map(GrantedAuthority::getAuthority)
+				.collect(Collectors.toList()));
+
+		return buildToken(claims, userDetails.getUsername());
+	}
+
+	private String buildToken(Map<String, Object> claims, String subject) {
+		return Jwts.builder()
+				.setClaims(claims)
+				.setSubject(subject)
+				.setIssuedAt(new Date())
+				.setExpiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
+				.signWith(getSignInKey(), SignatureAlgorithm.HS256)
+				.compact();
 	}
 
 	public boolean isTokenValid(String token, UserDetails userDetails) {
 		final String username = extractUsername(token);
-		return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
+		return username.equals(userDetails.getUsername()) && !isTokenExpired(token);
 	}
 
 	private boolean isTokenExpired(String token) {
@@ -92,15 +105,15 @@ public class JwtService {
 	}
 
 	private Claims extractAllClaims(String token) {
-		return Jwts.parserBuilder().setSigningKey(getSignInKey()).build().parseClaimsJws(token).getBody();
+		return Jwts.parserBuilder()
+				.setSigningKey(getSignInKey())
+				.build()
+				.parseClaimsJws(token)
+				.getBody();
 	}
 
 	private Key getSignInKey() {
 		byte[] keyBytes = Decoders.BASE64.decode(secretKey);
 		return Keys.hmacShaKeyFor(keyBytes);
-	}
-
-	private long getJwtExpiration() {
-		return Long.parseLong(jwtExpirationString.split("#")[0]);
 	}
 }

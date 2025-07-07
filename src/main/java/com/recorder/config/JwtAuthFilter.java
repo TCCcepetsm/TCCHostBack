@@ -18,12 +18,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.List;
 
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
 	private static final Logger logger = LoggerFactory.getLogger(JwtAuthFilter.class);
+	private static final String BEARER_PREFIX = "Bearer ";
+	private static final String AUTH_HEADER = "Authorization";
 
 	private final JwtService jwtService;
 	private final CustomUserDetailsService userDetailsService;
@@ -34,44 +35,42 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 	}
 
 	@Override
-	protected void doFilterInternal(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response,
-			@NonNull FilterChain filterChain) throws ServletException, IOException {
+	protected void doFilterInternal(@NonNull HttpServletRequest request,
+			@NonNull HttpServletResponse response,
+			@NonNull FilterChain filterChain)
+			throws ServletException, IOException {
 
-		final String authHeader = request.getHeader("Authorization");
+		final String authHeader = request.getHeader(AUTH_HEADER);
 
-		// Se não houver token, continue (o SecurityConfig bloqueará endpoints
-		// protegidos)
-		if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+		if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
 			filterChain.doFilter(request, response);
 			return;
 		}
 
 		try {
-			final String jwt = authHeader.substring(7);
+			final String jwt = authHeader.substring(BEARER_PREFIX.length());
 			final String userEmail = jwtService.extractUsername(jwt);
 
 			if (userEmail == null) {
-				logger.error("Token JWT não contém email válido");
-				response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token inválido");
+				sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "Token inválido");
 				return;
 			}
 
 			if (SecurityContextHolder.getContext().getAuthentication() == null) {
-				UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
+				UserDetails userDetails = userDetailsService.loadUserByUsername(userEmail);
 
 				if (jwtService.isTokenValid(jwt, userDetails)) {
-					// Extrai a role usando o novo método do JwtService
 					String role = jwtService.extractRole(jwt);
 
 					if (role == null) {
-						logger.error("Token sem role definida para usuário: {}", userEmail);
-						response.sendError(HttpServletResponse.SC_FORBIDDEN, "Token sem permissões definidas");
+						sendError(response, HttpServletResponse.SC_FORBIDDEN, "Token sem permissões definidas");
 						return;
 					}
 
-					// Cria a autenticação com a authority
-					UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(userDetails,
-							null, Collections.singletonList(new SimpleGrantedAuthority(role)));
+					UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+							userDetails,
+							null,
+							Collections.singleton(new SimpleGrantedAuthority(role)));
 
 					authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 					SecurityContextHolder.getContext().setAuthentication(authToken);
@@ -83,7 +82,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
 		} catch (Exception e) {
 			logger.error("Falha na autenticação JWT", e);
-			response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Falha na autenticação: " + e.getMessage());
+			sendError(response, HttpServletResponse.SC_UNAUTHORIZED, "Falha na autenticação: " + e.getMessage());
 		}
+	}
+
+	private void sendError(HttpServletResponse response, int status, String message) throws IOException {
+		logger.error("Erro de autenticação: {}", message);
+		response.sendError(status, message);
 	}
 }

@@ -3,7 +3,7 @@ package com.recorder.controller.entity;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import com.recorder.controller.entity.enuns.StatusAgendamento;
 import jakarta.persistence.*;
-
+import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -12,62 +12,71 @@ import java.time.LocalTime;
 @Table(name = "agendamento")
 public class Agendamento {
 
-   // Relacionamento ManyToOne
-   @ManyToOne(fetch = FetchType.LAZY)
-   @JoinColumn(name = "id_usuario")
-   @JsonManagedReference 
-   private Usuario usuario;
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id")
     private Long id;
 
-    @Column(name = "nome", nullable = false, length = 100)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id", nullable = false)
+    @JsonManagedReference
+    private Usuario usuario;
+
+    @NotBlank(message = "Nome é obrigatório")
+    @Size(max = 100, message = "Nome deve ter no máximo 100 caracteres")
+    @Column(nullable = false, length = 100)
     private String nome;
 
-    @Column(name = "email", nullable = false, length = 100)
+    @NotBlank(message = "Email é obrigatório")
+    @Email(message = "Email deve ser válido")
+    @Column(nullable = false, length = 100)
     private String email;
 
-    @Column(name = "telefone", length = 20)
+    @Size(max = 20, message = "Telefone deve ter no máximo 20 caracteres")
+    @Column(length = 20)
     private String telefone;
 
-    @Column(name = "plano", length = 50)
+    @Size(max = 50, message = "Plano deve ter no máximo 50 caracteres")
+    @Column(length = 50)
     private String plano;
 
-    @Column(name = "data", nullable = false)
+    @FutureOrPresent(message = "Data deve ser atual ou futura")
+    @Column(nullable = false)
     private LocalDate data;
 
-    @Column(name = "horario", nullable = false)
+    @Column(nullable = false)
     private LocalTime horario;
 
-    @Column(name = "esporte", nullable = false, length = 50)
+    @NotBlank(message = "Esporte é obrigatório")
+    @Size(max = 50, message = "Esporte deve ter no máximo 50 caracteres")
+    @Column(nullable = false, length = 50)
     private String esporte;
 
-    @Column(name = "local", length = 200)
+    @Size(max = 200, message = "Local deve ter no máximo 200 caracteres")
+    @Column(length = 200)
     private String local;
 
-    @Column(name = "latitude", precision = 10, scale = 6)
+    @Digits(integer = 10, fraction = 6, message = "Latitude deve ter no máximo 10 dígitos inteiros e 6 decimais")
+    @Column(precision = 10, scale = 6)
     private BigDecimal latitude;
 
-    @Column(name = "longitude", precision = 10, scale = 6)
+    @Digits(integer = 10, fraction = 6, message = "Longitude deve ter no máximo 10 dígitos inteiros e 6 decimais")
+    @Column(precision = 10, scale = 6)
     private BigDecimal longitude;
 
-    @Enumerated(EnumType.STRING) // Armazena o nome do enum no banco
-    @Column(name = "status", nullable = false, length = 20)
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
     private StatusAgendamento status = StatusAgendamento.PENDENTE;
 
-    public StatusAgendamento getStatus() {
-        return status;
+    // Métodos auxiliares de negócio
+    public boolean podeSerCancelado() {
+        return status == StatusAgendamento.PENDENTE || status == StatusAgendamento.CONFIRMADO;
     }
 
-    public void setStatus(StatusAgendamento status) {
-        this.status = status;
+    public boolean estaAtivo() {
+        return status != StatusAgendamento.CANCELADO && status != StatusAgendamento.CONCLUIDO;
     }
 
-    // Getters e Setters (incluindo o novo campo)
-
-
+    // Getters e Setters
     public Long getId() {
         return id;
     }
@@ -83,7 +92,6 @@ public class Agendamento {
     public void setUsuario(Usuario usuario) {
         this.usuario = usuario;
     }
-
 
     public String getNome() {
         return nome;
@@ -165,7 +173,37 @@ public class Agendamento {
         this.longitude = longitude;
     }
 
-    public void setDescricao(String testePersistência) {
+    public StatusAgendamento getStatus() {
+        return status;
+    }
 
+    public void setStatus(StatusAgendamento status) {
+        this.status = status;
+    }
+
+    // Equals e HashCode
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (!(o instanceof Agendamento))
+            return false;
+        return id != null && id.equals(((Agendamento) o).getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    // ToString
+    @Override
+    public String toString() {
+        return "Agendamento{" +
+                "id=" + id +
+                ", nome='" + nome + '\'' +
+                ", data=" + data +
+                ", status=" + status +
+                '}';
     }
 }

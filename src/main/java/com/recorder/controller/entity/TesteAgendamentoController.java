@@ -2,36 +2,62 @@ package com.recorder.controller.entity;
 
 import com.recorder.controller.entity.enuns.StatusAgendamento;
 import com.recorder.repository.AgendamentoRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
-@RequestMapping("/teste-agendamento")
+@RequestMapping("/api/teste/agendamentos")
+@Tag(name = "Testes - Agendamentos", description = "Endpoints para testes de agendamentos")
 public class TesteAgendamentoController {
 
-    @Autowired
-    private AgendamentoRepository agendamentoRepository;
+    private final AgendamentoRepository agendamentoRepository;
 
-    // Endpoint para salvar um agendamento de teste
-    @PostMapping("/salvar-teste")
-    public String salvarAgendamentoTeste() {
+    // Injeção por construtor (recomendado em vez de @Autowired)
+    public TesteAgendamentoController(AgendamentoRepository agendamentoRepository) {
+        this.agendamentoRepository = agendamentoRepository;
+    }
+
+    @PostMapping
+    @Operation(summary = "Criar agendamento de teste")
+    public ResponseEntity<String> criarAgendamentoTeste() {
         Agendamento agendamento = new Agendamento();
-        agendamento.setDescricao("TESTE PERSISTÊNCIA");
-        agendamento.setData(LocalDate.from(LocalDateTime.now()));
-        agendamento.setStatus(StatusAgendamento.valueOf("PENDENTE")); // Use o enum/valor correto do seu sistema
+        agendamento.setDescricao("TESTE PERSISTÊNCIA - " + System.currentTimeMillis());
+        agendamento.setData(LocalDate.now());
+        agendamento.setStatus(StatusAgendamento.PENDENTE);
 
         agendamentoRepository.save(agendamento);
 
-        return "Agendamento de teste salvo! Verifique o banco de dados.";
+        return ResponseEntity.ok()
+                .body("Agendamento de teste criado com ID: " + agendamento.getId());
     }
 
-    // Endpoint para listar todos os agendamentos (opcional)
-    @GetMapping("/listar")
-    public List<Agendamento> listarTodos() {
-        return agendamentoRepository.findAll();
+    @GetMapping
+    @Operation(summary = "Listar todos os agendamentos de teste")
+    public ResponseEntity<List<Agendamento>> listarTodosAgendamentosTeste() {
+        List<Agendamento> agendamentos = agendamentoRepository.findAll();
+
+        if (agendamentos.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+
+        return ResponseEntity.ok(agendamentos);
+    }
+
+    @DeleteMapping
+    @Operation(summary = "Limpar todos os agendamentos de teste")
+    public ResponseEntity<String> limparAgendamentosTeste() {
+        long count = agendamentoRepository.count();
+
+        if (count == 0) {
+            return ResponseEntity.ok("Nenhum agendamento para remover");
+        }
+
+        agendamentoRepository.deleteAll();
+        return ResponseEntity.ok(count + " agendamentos de teste removidos");
     }
 }

@@ -1,109 +1,164 @@
 package com.recorder.controller.entity;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.recorder.controller.entity.enuns.Roles;
-import com.recorder.dto.LoginDTO;
-import com.recorder.dto.UsuarioDTO;
-import com.recorder.dto.UsuarioResponse;
-import com.recorder.service.UsuarioService;
-import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.validation.BindingResult;
-import org.springframework.web.bind.annotation.*;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.*;
+import lombok.*;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
-import java.util.List;
-import java.util.Set;
+import java.time.LocalDateTime;
+import java.util.*;
 import java.util.stream.Collectors;
 
-@RestController
-@RequestMapping("/api/usuarios")
-public class UsuarioController {
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
+@Table(name = "usuarios", uniqueConstraints = {
+		@UniqueConstraint(columnNames = "email"),
+		@UniqueConstraint(columnNames = "cpf")
+})
+public class Usuario implements UserDetails {
 
-	@Autowired
-	private PasswordEncoder passwordEncoder;
+	private static final long serialVersionUID = 1L; // Para serialização
 
-	private final UsuarioService usuarioService;
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	@Column(name = "id_usuario")
+	private Long id;
 
-	public UsuarioController(UsuarioService usuarioService) {
-		this.usuarioService = usuarioService;
+	@NotBlank(message = "Nome é obrigatório")
+	@Size(max = 100, message = "Nome deve ter no máximo 100 caracteres")
+	private String nome;
+
+	@Email(message = "Email deve ser válido")
+	@NotBlank(message = "Email é obrigatório")
+	@Column(unique = true, length = 100)
+	private String email;
+
+	@NotBlank(message = "Telefone é obrigatório")
+	@Pattern(regexp = "^\\(?\\d{2}\\)?[\\s-]?\\d{4,5}[\\s-]?\\d{4}$", message = "Telefone deve estar no formato (99) 99999-9999")
+	@Column(length = 20)
+	private String telefone;
+
+	@NotBlank(message = "CPF é obrigatório")
+	@Pattern(regexp = "\\d{3}\\.?\\d{3}\\.?\\d{3}\\-?\\d{2}", message = "CPF deve estar no formato 999.999.999-99")
+	@Column(unique = true, length = 14)
+	private String cpf;
+
+	@NotBlank(message = "Senha é obrigatória")
+	@Size(min = 8, message = "Senha deve ter no mínimo 8 caracteres")
+	@Column(length = 255) // Tamanho adequado para hash de senha
+	private String senha;
+
+	@Builder.Default
+	@Column(name = "ativo", nullable = false)
+	private boolean ativo = true;
+
+	@Column(name = "data_criacao", updatable = false)
+	private LocalDateTime dataCriacao = LocalDateTime.now();
+
+	@Column(name = "ultimo_login")
+	private LocalDateTime ultimoLogin;
+
+	@Builder.Default
+	@ElementCollection(targetClass = Roles.class, fetch = FetchType.EAGER)
+	@CollectionTable(name = "usuario_roles", joinColumns = @JoinColumn(name = "usuario_id"))
+	@Enumerated(EnumType.STRING)
+	@Column(name = "role", length = 20)
+	private Set<Roles> roles = new HashSet<>();
+
+	@Builder.Default
+	@OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
+	@JsonBackReference
+	private List<Agendamento> agendamentos = new ArrayList<>();
+
+	@PrePersist
+	protected void aoCriar() {
+		dataCriacao = LocalDateTime.now();
 	}
 
-	@PostMapping("/registrar")
-	public ResponseEntity<?> registrar(@Valid @RequestBody UsuarioDTO usuarioDTO, BindingResult result) {
-		if (result.hasErrors()) {
-			return ResponseEntity.badRequest().body(result.getFieldErrors().stream()
-					.map(error -> error.getDefaultMessage()).collect(Collectors.toList()));
-		}
-
-		try {
-			usuarioDTO.validar();
-
-			// Converter DTO para entidade garantindo ROLE_USUARIO
-			Usuario usuario = new Usuario();
-			usuario.setEmail(usuarioDTO.getEmail());
-			usuario.setSenha(passwordEncoder.encode(usuarioDTO.getSenha()));
-			usuario.setNome(usuarioDTO.getNome());
-			usuario.setRoles(Set.of(Roles.ROLE_USUARIO)); // Garante ROLE_USUARIO
-
-			Usuario usuarioSalvo = usuarioService.registrar(usuarioDTO);
-
-			// Converter para DTO de resposta
-			UsuarioResponse response = new UsuarioResponse(usuarioSalvo.getIdUsuario(), usuarioSalvo.getNome(),
-					usuarioSalvo.getEmail(), usuarioSalvo.getTelefone(), usuarioSalvo.getCpf(),
-					usuarioSalvo.getRoles().stream().map(Roles::getDescricao) // Retorna ROLE_USUARIO
-							.collect(Collectors.toList()));
-
-			return ResponseEntity.ok(response);
-		} catch (IllegalArgumentException e) {
-			return ResponseEntity.badRequest().body(e.getMessage());
-		}
+	// Métodos do UserDetails
+	@Override
+	public Collection<? extends GrantedAuthority> getAuthorities() {
+		return roles.stream()
+				.map(role -> new SimpleGrantedAuthority(role.getAuthority()))
+				.collect(Collectors.toList());
 	}
 
-	@PostMapping("/login")
-	public ResponseEntity<?> login(@RequestBody LoginDTO loginDTO) {
-		try {
-			Usuario usuario = usuarioService.autenticar(loginDTO.getEmail(), loginDTO.getSenha());
-			return ResponseEntity.ok(usuario);
-		} catch (IllegalArgumentException e) {
-			return ResponseEntity.status(401).body("Credenciais inválidas");
-		}
+	@Override
+	public String getPassword() {
+		return senha;
 	}
 
-	// ======== CRUD AQUI ========
-
-	@GetMapping
-	public ResponseEntity<List<Usuario>> listarTodos() {
-		return ResponseEntity.ok(usuarioService.listarTodos());
+	@Override
+	public String getUsername() {
+		return email;
 	}
 
-	@GetMapping("/{id}")
-	public ResponseEntity<?> buscarPorId(@PathVariable Long id) {
-		try {
-			Usuario usuario = usuarioService.buscarPorId(id);
-			return ResponseEntity.ok(usuario);
-		} catch (RuntimeException e) {
-			return ResponseEntity.notFound().build();
-		}
+	@Override
+	public boolean isAccountNonExpired() {
+		return true;
 	}
 
-	@PutMapping("/{id}")
-	public ResponseEntity<?> atualizar(@PathVariable Long id, @RequestBody UsuarioDTO usuarioDTO) {
-		try {
-			Usuario atualizado = usuarioService.atualizar(id, usuarioDTO);
-			return ResponseEntity.ok(atualizado);
-		} catch (RuntimeException e) {
-			return ResponseEntity.badRequest().body(e.getMessage());
-		}
+	@Override
+	public boolean isAccountNonLocked() {
+		return true;
 	}
 
-	@DeleteMapping("/{id}")
-	public ResponseEntity<?> deletar(@PathVariable Long id) {
-		try {
-			usuarioService.deletar(id);
-			return ResponseEntity.ok().build();
-		} catch (RuntimeException e) {
-			return ResponseEntity.notFound().build();
-		}
+	@Override
+	public boolean isCredentialsNonExpired() {
+		return true;
+	}
+
+	@Override
+	public boolean isEnabled() {
+		return ativo;
+	}
+
+	// Métodos utilitários
+	public void adicionarRole(Roles role) {
+		roles.add(role);
+	}
+
+	public void removerRole(Roles role) {
+		roles.remove(role);
+	}
+
+	public boolean temRole(Roles role) {
+		return roles.contains(role);
+	}
+
+	public void registrarLogin() {
+		this.ultimoLogin = LocalDateTime.now();
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o)
+			return true;
+		if (!(o instanceof Usuario))
+			return false;
+		Usuario usuario = (Usuario) o;
+		return Objects.equals(id, usuario.id) &&
+				Objects.equals(email, usuario.email);
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(id, email);
+	}
+
+	@Override
+	public String toString() {
+		return "Usuario{" +
+				"id=" + id +
+				", nome='" + nome + '\'' +
+				", email='" + email + '\'' +
+				", ativo=" + ativo +
+				'}';
 	}
 }

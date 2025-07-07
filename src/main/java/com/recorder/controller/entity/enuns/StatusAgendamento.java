@@ -1,17 +1,27 @@
 package com.recorder.controller.entity.enuns;
 
+import java.util.Arrays;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public enum StatusAgendamento {
-    PENDENTE("Pendente", "Agendamento aguardando confirmação"),
-    CONFIRMADO("Confirmado", "Agendamento confirmado e válido"),
-    RECUSADO("Recusado", "Agendamento recusado ou cancelado");
+    PENDENTE("Pendente", "Agendamento aguardando confirmação", false),
+    CONFIRMADO("Confirmado", "Agendamento confirmado e válido", true),
+    RECUSADO("Recusado", "Agendamento recusado ou cancelado", false);
+
+    private static final Set<String> VALID_STATUS = Arrays.stream(values())
+            .map(StatusAgendamento::name)
+            .collect(Collectors.toSet());
 
     private final String descricao;
     private final String detalhes;
+    private final boolean statusPositivo;
 
-    StatusAgendamento(String descricao, String detalhes) {
+    StatusAgendamento(String descricao, String detalhes, boolean statusPositivo) {
         this.descricao = descricao;
         this.detalhes = detalhes;
+        this.statusPositivo = statusPositivo;
     }
 
     // Getters
@@ -23,38 +33,46 @@ public enum StatusAgendamento {
         return detalhes;
     }
 
-    // Método para verificar se o status é positivo
-    public boolean isConfirmado() {
-        return this == CONFIRMADO;
+    public boolean isStatusPositivo() {
+        return statusPositivo;
     }
 
-    // Método para verificar se o status permite alteração
+    // Métodos de negócio
     public boolean permiteAlteracao() {
         return this == PENDENTE;
     }
 
-    // Método para converter de String (útil para forms/APIs)
+    // Conversão e validação
     public static StatusAgendamento fromString(String text) {
-        if (text != null) {
-            for (StatusAgendamento status : StatusAgendamento.values()) {
-                if (text.equalsIgnoreCase(status.name()) ||
-                        text.equalsIgnoreCase(status.descricao)) {
-                    return status;
-                }
+        if (text == null || text.isBlank()) {
+            throw new IllegalArgumentException("Status não pode ser nulo ou vazio");
+        }
+
+        String normalized = text.trim().toUpperCase(Locale.ROOT);
+
+        for (StatusAgendamento status : values()) {
+            if (status.name().equals(normalized) ||
+                    status.descricao.equalsIgnoreCase(text)) {
+                return status;
             }
         }
-        throw new IllegalArgumentException("Nenhum status encontrado para: " + text);
+
+        throw new IllegalArgumentException(String.format(
+                "Status '%s' inválido. Valores permitidos: %s",
+                text,
+                String.join(", ", VALID_STATUS)));
     }
 
-    // Método para obter todos os valores como String (útil para frontend)
-    public static String[] names() {
-        StatusAgendamento[] statuses = values();
-        String[] names = new String[statuses.length];
-
-        for (int i = 0; i < statuses.length; i++) {
-            names[i] = statuses[i].name();
+    public static boolean isValid(String text) {
+        try {
+            fromString(text);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
         }
+    }
 
-        return names;
+    public static Set<String> getValidStatusNames() {
+        return VALID_STATUS;
     }
 }

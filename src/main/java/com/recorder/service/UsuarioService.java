@@ -1,97 +1,101 @@
-package com.recorder.service;
-
 import com.recorder.controller.entity.Usuario;
 import com.recorder.controller.entity.enuns.Roles;
 import com.recorder.dto.UsuarioDTO;
+import com.recorder.exception.BusinessException;
 import com.recorder.repository.UsuarioRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.List;
+import java.util.Set;
 
 @Service
+@RequiredArgsConstructor
 public class UsuarioService {
 
-    @Autowired
-    private UsuarioRepository repository;
-
+    private final UsuarioRepository repository;
     private final PasswordEncoder passwordEncoder;
 
-    public UsuarioService(PasswordEncoder passwordEncoder) {
-        this.passwordEncoder = passwordEncoder;
-    }
-
-    // REGISTRO
+    @Transactional
     public Usuario registrar(UsuarioDTO dto) {
+        // Validações
         if (!dto.getSenha().equals(dto.getConfirmarSenha())) {
-            throw new RuntimeException("As senhas não coincidem.");
+            throw new BusinessException("As senhas não coincidem", HttpStatus.BAD_REQUEST);
         }
 
         if (!dto.agreeTerms()) {
-            throw new RuntimeException("Você deve aceitar os termos.");
+            throw new BusinessException("Você deve aceitar os termos", HttpStatus.BAD_REQUEST);
         }
 
-        if (repository.existsByEmail(dto.getEmail())) {
-            throw new RuntimeException("Email já cadastrado.");
+        if (repository.existsByEmailIgnoreCase(dto.getEmail())) {
+            throw new BusinessException("Email já cadastrado", HttpStatus.CONFLICT);
         }
 
-        Usuario usuario = new Usuario();
-        usuario.setNome(dto.getNome());
-        usuario.setEmail(dto.getEmail());
-        usuario.setCpf(dto.getCpf());
-        usuario.setTelefone(dto.getTelefone());
-        usuario.setSenha(passwordEncoder.encode(dto.getSenha()));
-        usuario.setRoles(Set.of(Roles.ROLE_USUARIO)); // role padrão
+        // Construção do usuário
+        Usuario usuario = Usuario.builder()
+                .nome(dto.getNome())
+                .email(dto.getEmail().toLowerCase()) // Normalização para PostgreSQL
+                .cpf(dto.getCpf().replaceAll("\\D", "")) // Remove formatação
+                .telefone(dto.getTelefone().replaceAll("\\D", ""))
+                .senha(passwordEncoder.encode(dto.getSenha()))
+                .roles(Set.of(Roles.ROLE_USUARIO))
+                .ativo(true)
+                .build();
 
         return repository.save(usuario);
     }
 
-    // LOGIN
+    @Transactional(readOnly = true)
     public Usuario autenticar(String email, String senha) {
-        Optional<Usuario> usuarioOpt = repository.findByEmail(email);
-
-        if (usuarioOpt.isEmpty()) {
-            throw new IllegalArgumentException("Usuário não encontrado");
-        }
-
-        Usuario usuario = usuarioOpt.get();
+        Usuario usuario = repository.findByEmailWithRoles(email.toLowerCase())
+                .orElseThrow(() -> new BusinessException("Credenciais inválidas", HttpStatus.UNAUTHORIZED));
 
         if (!passwordEncoder.matches(senha, usuario.getSenha())) {
-            throw new IllegalArgumentException("Senha incorreta");
+            throw new BusinessException("Credenciais inválidas", HttpStatus.UNAUTHORIZED);
+        }
+
+        if (!usuario.isAtivo()) {
+            throw new BusinessException("Usuário desativado", HttpStatus.FORBIDDEN);
         }
 
         return usuario;
     }
 
-    // ======== CRUD ADICIONADO AQUI ========
-
+    // ======== CRUD ========
+    @Transactional(readOnly = true)
     public List<Usuario> listarTodos() {
-        return repository.findAll();
+        return repository.findAllUsuariosWithRoles();
     }
 
+    @Transactional(readOnly = true)
     public Usuario buscarPorId(Long id) {
-        return repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+        return repository.findByIdWithRoles(id)
+                .orElseThrow(() -> new BusinessException("Usuário não encontrado", HttpStatus.NOT_FOUND));
     }
 
+    @Transactional
     public Usuario atualizar(Long id, UsuarioDTO dto) {
-        Usuario usuarioExistente = buscarPorId(id);
+        Usuario usuario = buscarPorId(id);
 
-        usuarioExistente.setNome(dto.getNome());
-        usuarioExistente.setEmail(dto.getEmail());
-        usuarioExistente.setCpf(dto.getCpf());
-        usuarioExistente.setTelefone(dto.getTelefone());
+        usuario.setNome(dto.getNome());
+        usuario.setEmail(dto.getEmail().toLowerCase());
+        usuario.setCpf(dto.getCpf().replaceAll("\\D", ""));
+        usuario.setTelefone(dto.getTelefone().replaceAll("\\D", ""));
 
         if (dto.getSenha() != null && !dto.getSenha().isBlank()) {
-            usuarioExistente.setSenha(passwordEncoder.encode(dto.getSenha()));
+            usuario.setSenha(passwordEncoder.encode(dto.getSenha()));
         }
 
-        return repository.save(usuarioExistente);
+        return repository.save(usuario);
     }
 
-    public void deletar(Long id) {
+    @Transactional
+    public void desativarUsuario(Long id) {
         Usuario usuario = buscarPorId(id);
-        repository.delete(usuario);
+        usuario.setAtivo(false);
+        repository.save(usuario);
     }
 }
