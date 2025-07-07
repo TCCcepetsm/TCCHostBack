@@ -6,7 +6,6 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -23,8 +22,8 @@ public class CustomUserDetails implements UserDetails {
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return usuario.getRoles().stream()
                 .map(role -> {
-                    String roleName = role.name();
-                    // Garante que o papel tenha o prefixo ROLE_
+                    String roleName = role.name(); // Pega o nome do enum (ex: "ADMIN", "USUARIO")
+                    // Garante que o papel tenha o prefixo ROLE_ exigido pelo Spring Security
                     return new SimpleGrantedAuthority(
                             roleName.startsWith(ROLE_PREFIX) ? roleName : ROLE_PREFIX + roleName);
                 })
@@ -33,7 +32,7 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public String getPassword() {
-        return usuario.getSenha(); // Ou getPassword() dependendo do seu campo
+        return usuario.getSenha();
     }
 
     @Override
@@ -43,22 +42,26 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public boolean isAccountNonExpired() {
-        return !usuario.isExpirado(); // Implementar método na classe Usuario se necessário
+        // CORREÇÃO: Delega para o método isAccountNonExpired() existente em Usuario
+        return usuario.isAccountNonExpired();
     }
 
     @Override
     public boolean isAccountNonLocked() {
-        return !usuario.isBloqueado(); // Implementar método na classe Usuario se necessário
+        // CORREÇÃO: Delega para o método isAccountNonLocked() existente em Usuario
+        return usuario.isAccountNonLocked();
     }
 
     @Override
     public boolean isCredentialsNonExpired() {
-        return true; // Ou implementar lógica específica
+        // CORREÇÃO: Delega para o método isCredentialsNonExpired() existente em Usuario
+        return usuario.isCredentialsNonExpired();
     }
 
     @Override
     public boolean isEnabled() {
-        return usuario.isAtivo(); // Implementar método na classe Usuario
+        // CORREÇÃO: Delega para o método isEnabled() existente em Usuario
+        return usuario.isEnabled();
     }
 
     public Usuario getUsuario() {

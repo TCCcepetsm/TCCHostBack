@@ -1,3 +1,5 @@
+package com.recorder.service;
+
 import com.recorder.controller.entity.Usuario;
 import com.recorder.controller.entity.enuns.Roles;
 import com.recorder.dto.UsuarioDTO;

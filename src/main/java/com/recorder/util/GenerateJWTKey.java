@@ -1,3 +1,5 @@
+package com.recorder.util;
+
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import javax.crypto.SecretKey;

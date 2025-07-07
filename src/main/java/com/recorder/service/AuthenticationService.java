@@ -1,7 +1,9 @@
+package com.recorder.service;
+
 import com.recorder.controller.entity.Usuario;
 import com.recorder.exception.AuthenticationException;
 import com.recorder.repository.UsuarioRepository;
-import com.recorder.config.JwtService;
+
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthenticationService {
     private static final Logger logger = LoggerFactory.getLogger(AuthenticationService.class);
     private final UsuarioRepository usuarioRepository;
-    private final JwtService jwtService;
 
     public Usuario getUsuarioAutenticado() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

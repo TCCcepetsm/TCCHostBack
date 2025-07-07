@@ -26,7 +26,6 @@ public class TesteAgendamentoController {
     @Operation(summary = "Criar agendamento de teste")
     public ResponseEntity<String> criarAgendamentoTeste() {
         Agendamento agendamento = new Agendamento();
-        agendamento.setDescricao("TESTE PERSISTÊNCIA - " + System.currentTimeMillis());
         agendamento.setData(LocalDate.now());
         agendamento.setStatus(StatusAgendamento.PENDENTE);
 

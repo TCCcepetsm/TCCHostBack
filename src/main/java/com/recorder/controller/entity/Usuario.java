@@ -7,9 +7,11 @@ import jakarta.validation.constraints.*;
 import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
+import java.util.stream.Collectors; // Adicione esta importação se ainda não tiver
+// Adicione esta importação se ainda não tiver
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Data
 @Builder
@@ -63,7 +65,7 @@ public class Usuario implements UserDetails {
 	@Builder.Default
 	@OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
 	@JsonBackReference
-	private List<Agendamento> agendamentos = new ArrayList<>();
+	private Set<Agendamento> agendamentos = new HashSet<>(); // <-- MUDOU DE List para Set
 
 	// Métodos do UserDetails
 	@Override
@@ -81,6 +83,12 @@ public class Usuario implements UserDetails {
 	@Override
 	public String getUsername() {
 		return email;
+	}
+
+	public List<String> getRolesAsStrings() {
+		return this.roles.stream()
+				.map(roleEnum -> roleEnum.getAuthority()) // Pega a string da autoridade do enum Roles
+				.collect(Collectors.toList());
 	}
 
 	@Override

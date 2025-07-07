@@ -1,164 +1,50 @@
-package com.recorder.controller.entity;
+package com.recorder.controller.entity; // Verifique se este é o pacote correto para seus controllers
 
-import com.fasterxml.jackson.annotation.JsonBackReference;
-import com.recorder.controller.entity.enuns.Roles;
-import jakarta.persistence.*;
-import jakarta.validation.constraints.*;
-import lombok.*;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
+import com.recorder.dto.UsuarioDTO; // O DTO que você usa no seu serviço
+import com.recorder.service.UsuarioService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
-import java.util.*;
-import java.util.stream.Collectors;
+@RestController // Indica que esta classe é um controller REST
+@RequestMapping("/api/usuarios") // Define o caminho base para todos os endpoints neste controller
+@RequiredArgsConstructor // Gera um construtor com os campos 'final' para injeção de dependência
+@Tag(name = "Usuários", description = "Gerenciamento de usuários da aplicação") // Anotação para documentação
+																				// Swagger/OpenAPI
+public class UsuarioController {
 
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-@Entity
-@Table(name = "usuarios", uniqueConstraints = {
-		@UniqueConstraint(columnNames = "email"),
-		@UniqueConstraint(columnNames = "cpf")
-})
-public class Usuario implements UserDetails {
+	private final UsuarioService usuarioService; // Injeção de dependência do serviço de usuário
 
-	private static final long serialVersionUID = 1L; // Para serialização
-
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	@Column(name = "id_usuario")
-	private Long id;
-
-	@NotBlank(message = "Nome é obrigatório")
-	@Size(max = 100, message = "Nome deve ter no máximo 100 caracteres")
-	private String nome;
-
-	@Email(message = "Email deve ser válido")
-	@NotBlank(message = "Email é obrigatório")
-	@Column(unique = true, length = 100)
-	private String email;
-
-	@NotBlank(message = "Telefone é obrigatório")
-	@Pattern(regexp = "^\\(?\\d{2}\\)?[\\s-]?\\d{4,5}[\\s-]?\\d{4}$", message = "Telefone deve estar no formato (99) 99999-9999")
-	@Column(length = 20)
-	private String telefone;
-
-	@NotBlank(message = "CPF é obrigatório")
-	@Pattern(regexp = "\\d{3}\\.?\\d{3}\\.?\\d{3}\\-?\\d{2}", message = "CPF deve estar no formato 999.999.999-99")
-	@Column(unique = true, length = 14)
-	private String cpf;
-
-	@NotBlank(message = "Senha é obrigatória")
-	@Size(min = 8, message = "Senha deve ter no mínimo 8 caracteres")
-	@Column(length = 255) // Tamanho adequado para hash de senha
-	private String senha;
-
-	@Builder.Default
-	@Column(name = "ativo", nullable = false)
-	private boolean ativo = true;
-
-	@Column(name = "data_criacao", updatable = false)
-	private LocalDateTime dataCriacao = LocalDateTime.now();
-
-	@Column(name = "ultimo_login")
-	private LocalDateTime ultimoLogin;
-
-	@Builder.Default
-	@ElementCollection(targetClass = Roles.class, fetch = FetchType.EAGER)
-	@CollectionTable(name = "usuario_roles", joinColumns = @JoinColumn(name = "usuario_id"))
-	@Enumerated(EnumType.STRING)
-	@Column(name = "role", length = 20)
-	private Set<Roles> roles = new HashSet<>();
-
-	@Builder.Default
-	@OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
-	@JsonBackReference
-	private List<Agendamento> agendamentos = new ArrayList<>();
-
-	@PrePersist
-	protected void aoCriar() {
-		dataCriacao = LocalDateTime.now();
+	/**
+	 * Endpoint para registrar um novo usuário no sistema.
+	 * Recebe um UsuarioDTO no corpo da requisição e delega ao serviço.
+	 * Retorna o usuário cadastrado com status 201 Created.
+	 */
+	@PostMapping("/cadastro") // Define o endpoint POST para /api/usuarios/cadastro
+	@ResponseStatus(HttpStatus.CREATED) // Retorna status HTTP 201 Created em caso de sucesso
+	@Operation(summary = "Registra um novo usuário", description = "Cria uma nova conta de usuário no sistema.", responses = {
+			@ApiResponse(responseCode = "201", description = "Usuário registrado com sucesso", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Usuario.class))),
+			@ApiResponse(responseCode = "400", description = "Dados de entrada inválidos ou senhas não conferem", content = @Content(mediaType = "application/json", schema = @Schema(example = "{\"message\": \"As senhas não coincidem\"}"))),
+			@ApiResponse(responseCode = "409", description = "Email ou CPF já cadastrados", content = @Content(mediaType = "application/json", schema = @Schema(example = "{\"message\": \"Email já cadastrado\"}")))
+	})
+	public ResponseEntity<Usuario> registrarUsuario(@Valid @RequestBody UsuarioDTO usuarioDTO) {
+		// O @Valid garante que as validações definidas no UsuarioDTO (ex: @NotBlank,
+		// @Email)
+		// serão aplicadas automaticamente antes do método ser executado.
+		Usuario novoUsuario = usuarioService.registrar(usuarioDTO);
+		return ResponseEntity.status(HttpStatus.CREATED).body(novoUsuario);
 	}
 
-	// Métodos do UserDetails
-	@Override
-	public Collection<? extends GrantedAuthority> getAuthorities() {
-		return roles.stream()
-				.map(role -> new SimpleGrantedAuthority(role.getAuthority()))
-				.collect(Collectors.toList());
-	}
-
-	@Override
-	public String getPassword() {
-		return senha;
-	}
-
-	@Override
-	public String getUsername() {
-		return email;
-	}
-
-	@Override
-	public boolean isAccountNonExpired() {
-		return true;
-	}
-
-	@Override
-	public boolean isAccountNonLocked() {
-		return true;
-	}
-
-	@Override
-	public boolean isCredentialsNonExpired() {
-		return true;
-	}
-
-	@Override
-	public boolean isEnabled() {
-		return ativo;
-	}
-
-	// Métodos utilitários
-	public void adicionarRole(Roles role) {
-		roles.add(role);
-	}
-
-	public void removerRole(Roles role) {
-		roles.remove(role);
-	}
-
-	public boolean temRole(Roles role) {
-		return roles.contains(role);
-	}
-
-	public void registrarLogin() {
-		this.ultimoLogin = LocalDateTime.now();
-	}
-
-	@Override
-	public boolean equals(Object o) {
-		if (this == o)
-			return true;
-		if (!(o instanceof Usuario))
-			return false;
-		Usuario usuario = (Usuario) o;
-		return Objects.equals(id, usuario.id) &&
-				Objects.equals(email, usuario.email);
-	}
-
-	@Override
-	public int hashCode() {
-		return Objects.hash(id, email);
-	}
-
-	@Override
-	public String toString() {
-		return "Usuario{" +
-				"id=" + id +
-				", nome='" + nome + '\'' +
-				", email='" + email + '\'' +
-				", ativo=" + ativo +
-				'}';
-	}
+	// Você pode adicionar mais endpoints CRUD aqui no futuro, como:
+	// GET /api/usuarios/{id}
+	// PUT /api/usuarios/{id}
+	// DELETE /api/usuarios/{id}
+	// GET /api/usuarios
 }

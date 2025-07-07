@@ -68,12 +68,15 @@ public class Agendamento {
     private StatusAgendamento status = StatusAgendamento.PENDENTE;
 
     // Métodos auxiliares de negócio
+    // Adicione estes métodos na sua classe Agendamento existente
+
     public boolean podeSerCancelado() {
-        return status == StatusAgendamento.PENDENTE || status == StatusAgendamento.CONFIRMADO;
+        return this.status == StatusAgendamento.PENDENTE ||
+                this.status == StatusAgendamento.CONFIRMADO;
     }
 
     public boolean estaAtivo() {
-        return status != StatusAgendamento.CANCELADO && status != StatusAgendamento.CONCLUIDO;
+        return this.status != StatusAgendamento.RECUSADO;
     }
 
     // Getters e Setters

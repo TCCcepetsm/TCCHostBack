@@ -8,7 +8,8 @@ import jakarta.validation.constraints.PastOrPresent;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
+import lombok.AllArgsConstructor; // <--- ADICIONE ESTA LINHA AQUI!
+import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
 
 @Entity
@@ -16,6 +17,7 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor // <--- ADICIONE ESTA LINHA AQUI!
 public class Galeria {
 
         @Id
@@ -47,7 +49,8 @@ public class Galeria {
         @Column(name = "is_publico", nullable = false)
         private boolean publico = true;
 
-        // Construtor para campos obrigatórios
+        // Construtor para campos obrigatórios (mantém este se você o usa explicitamente
+        // em algum lugar)
         public Galeria(String midiaUrl, TipoMidia tipo, Usuario profissional) {
                 this.midiaUrl = midiaUrl;
                 this.tipo = tipo;

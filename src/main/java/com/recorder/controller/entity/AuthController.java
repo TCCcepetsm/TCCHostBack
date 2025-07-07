@@ -17,13 +17,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.GrantedAuthority;
+// import org.springframework.security.core.GrantedAuthority; // Não é necessário aqui
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.User; // User do Spring Security
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException; // <--- ADICIONADO: Importação para UsernameNotFoundException
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.util.List; // Necessário se AuthenticationResponse.roles for List
 
 @Slf4j
 @RestController
@@ -53,13 +54,19 @@ public class AuthController {
 
 			// 2. Buscar usuário
 			Usuario usuario = usuarioRepository.findByEmail(request.getEmail())
-					.orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado"));
+					// CORREÇÃO: O lambda deve retornar uma nova instância de
+					// UsernameNotFoundException
+					.orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado: " + request.getEmail()));
 
 			// 3. Gerar token JWT
-			UserDetails userDetails = new User(
-					usuario.getEmail(),
-					usuario.getSenha(),
-					usuario.getAuthorities());
+			// Note: Você já tem o Usuario implementando UserDetails.
+			// Pode usar o próprio objeto 'usuario' diretamente como UserDetails.
+			// UserDetails userDetails = new User(
+			// usuario.getEmail(),
+			// usuario.getSenha(),
+			// usuario.getAuthorities());
+			// Ou simplesmente:
+			UserDetails userDetails = usuario; // Usuario já é um UserDetails
 
 			String jwtToken = jwtService.generateToken(userDetails);
 
@@ -77,6 +84,7 @@ public class AuthController {
 
 		} catch (BadCredentialsException e) {
 			log.warn("Tentativa de autenticação falhou para: {}", request.getEmail());
+			// Lança sua exceção customizada para tratamento global
 			throw new AuthenticationFailedException("Credenciais inválidas");
 		}
 	}
