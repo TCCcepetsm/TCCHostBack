@@ -20,7 +20,7 @@
     <properties>
         <java.version>17</java.version>
         <postgresql.version>42.7.3</postgresql.version>
-        <jjwt.version>0.12.5</jjwt.version>
+        <jjwt.version>0.11.5</jjwt.version> <!-- OU 0.11.2, 0.11.0. Tente 0.11.5 primeiro. -->
         <springdoc.version>2.5.0</springdoc.version>
         <testcontainers.version>1.19.8</testcontainers.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
