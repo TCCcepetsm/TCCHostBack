@@ -66,7 +66,7 @@ public class EventoEsportivo {
 
     // Método para verificar conflito de horários
     public boolean temConflitoHorario(LocalTime novaHoraInicio, LocalTime novaHoraFim) {
-        return (novaHoraInicio.isBefore(horaFim) && novaHoraFim.isAfter(horaInicio);
+        return (novaHoraInicio.isBefore(horaFim) && novaHoraFim.isAfter(horaInicio));
     }
 
     @Override
